@@ -32,3 +32,4 @@ where = ["packages/core", "apps/api", "apps/cli"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["packages/core", "apps/api", "apps/cli"]
+asyncio_default_fixture_loop_scope = "function"

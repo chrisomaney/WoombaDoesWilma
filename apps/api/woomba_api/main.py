@@ -1,20 +1,25 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import re
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from woomba.consent import CONSENT_TEXT, accept_consent, read_consent, require_consent
 from woomba.jobs import create_project, enqueue_job, get_job, get_project, list_jobs, list_projects
-from woomba.models import JobType, Timeline
+from woomba.models import JobStatus, JobType, Timeline
 from woomba.paths import ensure_library_layout
 from woomba.settings import get_settings
 from woomba.timeline import load_timeline, save_timeline
+from woomba_api.auth import enforce_token
 from woomba_api.deps import get_conn
+from woomba_api.runner import cancel_job, start_worker
 
-app = FastAPI(title="WoombaDoesWilma", version="0.1.0")
+app = FastAPI(title="WoombaDoesWilma", version="0.1.0", dependencies=[Depends(enforce_token)])
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -46,8 +51,9 @@ class TimelineUpdateBody(BaseModel):
 @app.on_event("startup")
 def _startup() -> None:
     settings = get_settings()
-    ensure_library_layout(settings.resolve_library())
+    root = ensure_library_layout(settings.resolve_library())
     get_conn()
+    start_worker(root)
 
 
 @app.get("/api/health")
@@ -152,3 +158,39 @@ def api_get_job(job_id: str) -> dict:
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job.model_dump()
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+def api_cancel_job(job_id: str) -> dict:
+    _require()
+    job = get_job(get_conn(), job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status in {JobStatus.succeeded, JobStatus.failed, JobStatus.cancelled}:
+        return job.model_dump()
+    cancel_job(get_conn(), job_id)
+    updated = get_job(get_conn(), job_id)
+    assert updated is not None
+    return updated.model_dump()
+
+
+@app.get("/api/jobs/{job_id}/events")
+async def api_job_events(job_id: str) -> StreamingResponse:
+    _require()
+
+    async def gen():
+        while True:
+            job = get_job(get_conn(), job_id)
+            if not job:
+                yield f"data: {json.dumps({'error': 'not_found'})}\n\n"
+                break
+            payload = job.model_dump()
+            # enums -> values for JSON
+            payload["type"] = job.type.value
+            payload["status"] = job.status.value
+            yield f"data: {json.dumps(payload)}\n\n"
+            if job.status in {JobStatus.succeeded, JobStatus.failed, JobStatus.cancelled}:
+                break
+            await asyncio.sleep(0.5)
+
+    return StreamingResponse(gen(), media_type="text/event-stream")

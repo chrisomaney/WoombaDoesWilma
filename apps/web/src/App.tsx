@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { acceptConsent, fetchConsent, type ConsentState } from "./api";
+import ExportPage from "./pages/Export";
+import LibraryPage from "./pages/Library";
+import ProjectPage from "./pages/Project";
 
 function TopBar() {
   return (
@@ -47,26 +50,6 @@ function ConsentGate({
           <button className="btn btn-primary" disabled={busy} onClick={onAccept}>
             {busy ? "Saving…" : "I agree — continue"}
           </button>
-        </div>
-      </div>
-    </main>
-  );
-}
-
-function LibraryPage() {
-  return (
-    <main className="page">
-      <div className="panel">
-        <h2>Library</h2>
-        <p className="muted">
-          Projects will appear here after import. Drop clips into your inbox folder, then create a
-          project from the CLI or upcoming UI actions.
-        </p>
-        <p className="muted">Next up in v1: project timeline, rough-cut jobs, and export.</p>
-        <div className="actions">
-          <Link className="btn" to="/">
-            Refresh
-          </Link>
         </div>
       </div>
     </main>
@@ -130,6 +113,8 @@ export default function App() {
       <TopBar />
       <Routes>
         <Route path="/" element={<LibraryPage />} />
+        <Route path="/projects/:projectId" element={<ProjectPage />} />
+        <Route path="/projects/:projectId/export" element={<ExportPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
