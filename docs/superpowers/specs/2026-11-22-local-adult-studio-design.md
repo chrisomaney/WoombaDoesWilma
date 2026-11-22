@@ -1,7 +1,7 @@
 # Local Adult Video Studio — Design Spec
 
 **Date:** 2026-11-22  
-**Status:** Draft for review  
+**Status:** Awaiting user review  
 **Product working name:** WoombaDoesWilma (local Mac studio)  
 **Host:** MacBook Pro (Apple Silicon preferred; CPU-safe path required)
 
