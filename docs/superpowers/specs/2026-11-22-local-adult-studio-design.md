@@ -27,7 +27,7 @@ Build a **private, on-device** home studio that helps edit and later create amat
 
 - FastAPI API + SQLite job store
 - FFmpeg-centered media workers
-- Local React (or equivalent) web UI on `127.0.0.1`
+- Local React web UI on `127.0.0.1`
 - Optional LAN bind behind a simple shared token
 - Same jobs runnable via CLI for batch work
 
