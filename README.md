@@ -7,9 +7,10 @@ Everything stays local. Consenting-adult footage only. No cloud upload by defaul
 
 ## Status
 
-Design in progress. See:
+Implementation in progress. Design + plan:
 
-`docs/superpowers/specs/2026-11-22-local-adult-studio-design.md`
+- `docs/superpowers/specs/2026-11-22-local-adult-studio-design.md`
+- `docs/superpowers/plans/2026-11-22-local-adult-studio.md`
 
 ## Boundaries
 
@@ -18,7 +19,26 @@ Design in progress. See:
 - Masters never overwritten
 - Generation deferred until stronger hardware
 
+## Quick start (dev)
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+export WOOMBA_LIBRARY=/tmp/woomba-lib
+woomba init --i-consent
+woomba serve
+```
+
+In another terminal:
+
+```bash
+cd apps/web && npm install && npm run dev
+```
+
+Open http://127.0.0.1:5173
+
 ## Planned stack
 
-- Local web UI + FastAPI job queue + FFmpeg workers
+- Local React web UI + FastAPI job queue + FFmpeg workers
 - CLI parity for batch jobs on MacBook Pro
