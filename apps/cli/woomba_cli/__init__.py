@@ -1,0 +1,1 @@
+"""WoombaDoesWilma CLI."""
