@@ -3,11 +3,15 @@ from __future__ import annotations
 import uvicorn
 import typer
 
-from woomba.consent import CONSENT_TEXT, accept_consent, read_consent
-from woomba.paths import ensure_library_layout
+from woomba.consent import CONSENT_TEXT, accept_consent, read_consent, require_consent
+from woomba.db import connect
+from woomba.jobs import create_project, list_projects
+from woomba.paths import db_path, ensure_library_layout
 from woomba.settings import get_settings
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="WoombaDoesWilma local studio CLI")
+project_app = typer.Typer(help="Manage projects")
+app.add_typer(project_app, name="project")
 
 
 @app.command("init")
@@ -37,6 +41,33 @@ def consent_cmd() -> None:
     record = read_consent(settings.resolve_library())
     typer.echo(f"accepted={record.accepted} version={record.version} at={record.accepted_at}")
     typer.echo(record.text)
+
+
+@project_app.command("create")
+def project_create(
+    project_id: str = typer.Argument(..., help="Project id (letters, numbers, _-)"),
+    title: str | None = typer.Option(None, help="Optional title"),
+) -> None:
+    settings = get_settings()
+    root = ensure_library_layout(settings.resolve_library())
+    require_consent(root)
+    conn = connect(db_path(root))
+    project = create_project(conn, root, project_id, title)
+    typer.echo(f"Created project {project.id}")
+
+
+@project_app.command("list")
+def project_list() -> None:
+    settings = get_settings()
+    root = ensure_library_layout(settings.resolve_library())
+    require_consent(root)
+    conn = connect(db_path(root))
+    projects = list_projects(conn)
+    if not projects:
+        typer.echo("No projects yet.")
+        return
+    for project in projects:
+        typer.echo(f"{project.id}\t{project.title}")
 
 
 @app.command("serve")
