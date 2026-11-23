@@ -27,7 +27,15 @@ chmod +x scripts/mac-start.sh
 ./scripts/mac-start.sh
 ```
 
-Opens API + UI together. Ctrl+C stops both.
+Builds the web UI and serves everything at **http://127.0.0.1:8787**. Ctrl+C stops it.
+
+Hot-reload frontend during development:
+
+```bash
+WOOMBA_DEV=1 ./scripts/mac-start.sh
+```
+
+Then open http://127.0.0.1:5173
 
 ### Manual (two terminals)
 
@@ -51,8 +59,8 @@ Open http://127.0.0.1:5173
 
 1. Drop clips into `$WOOMBA_LIBRARY/inbox/` (`.mp4` / `.mov` ok)
 2. Open http://127.0.0.1:5173 → create a project → open it
-3. Click **Import inbox** (or **Scan sources folder** if you already copied into `projects/<id>/sources`)
-4. Run **analyze → roughcut → export**
+3. Click **Import files…** (or inbox / scan sources)
+4. Click **Auto rough-cut** (analyze + roughcut), tweak cuts on the scrubber, then **Export keep only**
 5. Find renders in `$WOOMBA_LIBRARY/exports/`
 
 ## Typical CLI workflow

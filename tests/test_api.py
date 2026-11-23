@@ -47,6 +47,27 @@ def test_import_sources_and_media(tmp_path: Path, monkeypatch) -> None:
     assert len(media.content) > 100
 
 
+def test_delete_clip_and_auto_job_type(tmp_path: Path, monkeypatch) -> None:
+    assert FIXTURE.exists()
+    monkeypatch.setenv("WOOMBA_LIBRARY", str(tmp_path))
+    from woomba_api.deps import _conn_for
+    from woomba_api.main import app
+
+    _conn_for.cache_clear()
+    client = TestClient(app)
+    client.post("/api/consent", json={"accept": True})
+    client.post("/api/projects", json={"id": "del-api", "title": "Del"})
+    sources = tmp_path / "projects" / "del-api" / "sources"
+    sources.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(FIXTURE, sources / "clip.mp4")
+    imported = client.post("/api/projects/del-api/import", json={"source": "sources"}).json()
+    clip_id = imported["timeline"]["clips"][0]["id"]
+    deleted = client.delete(f"/api/projects/del-api/clips/{clip_id}").json()
+    assert deleted["remaining"] == 0
+    job = client.post("/api/projects/del-api/jobs", json={"type": "auto_roughcut"}).json()
+    assert job["type"] == "auto_roughcut"
+
+
 def test_upload_files(tmp_path: Path, monkeypatch) -> None:
     assert FIXTURE.exists()
     monkeypatch.setenv("WOOMBA_LIBRARY", str(tmp_path))

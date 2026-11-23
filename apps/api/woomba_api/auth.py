@@ -6,7 +6,10 @@ from woomba.settings import get_settings
 
 
 def enforce_token(request: Request, x_woomba_token: str | None = Header(default=None)) -> None:
-    """Require token only when LAN mode is enabled."""
+    """Require token only for /api routes when LAN mode is enabled."""
+    path = request.url.path
+    if not path.startswith("/api"):
+        return
     settings = get_settings()
     if not settings.lan:
         return
