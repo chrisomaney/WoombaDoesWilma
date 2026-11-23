@@ -1,16 +1,19 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { createProject, listProjects, type Project } from "../api";
+import { createProject, fetchLibrary, listProjects, type LibraryInfo, type Project } from "../api";
 
 export default function LibraryPage() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [library, setLibrary] = useState<LibraryInfo | null>(null);
   const [id, setId] = useState("");
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
-    setProjects(await listProjects());
+    const [nextProjects, nextLibrary] = await Promise.all([listProjects(), fetchLibrary()]);
+    setProjects(nextProjects);
+    setLibrary(nextLibrary);
   }
 
   useEffect(() => {
@@ -40,9 +43,28 @@ export default function LibraryPage() {
       <div className="panel">
         <h2>Library</h2>
         <p className="muted">
-          Create a project, import clips with the CLI (`woomba import --project …`), then open the
-          timeline to rough-cut and export.
+          Drop `.mp4` / `.mov` files into the inbox folder, create a project, open it, then click
+          <strong> Import inbox</strong>.
         </p>
+        {library ? (
+          <div className="path-box">
+            <div>
+              <span className="muted">Inbox</span>
+              <code>{library.inbox}</code>
+            </div>
+            <div>
+              <span className="muted">Waiting files</span>
+              <strong>{library.inbox_files.count}</strong>
+              {library.inbox_files.names.length ? (
+                <span className="muted"> — {library.inbox_files.names.slice(0, 5).join(", ")}</span>
+              ) : null}
+            </div>
+            <div>
+              <span className="muted">Exports</span>
+              <code>{library.exports}</code>
+            </div>
+          </div>
+        ) : null}
         <form className="actions" onSubmit={onCreate}>
           <input
             value={id}

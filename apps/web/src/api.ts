@@ -44,6 +44,14 @@ export type Job = {
   error?: string | null;
 };
 
+export type LibraryInfo = {
+  library: string;
+  inbox: string;
+  projects: string;
+  exports: string;
+  inbox_files: { count: number; names: string[] };
+};
+
 async function parseJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const detail = await response.text();
@@ -64,6 +72,10 @@ export async function acceptConsent(): Promise<ConsentState> {
       body: JSON.stringify({ accept: true }),
     }),
   );
+}
+
+export async function fetchLibrary(): Promise<LibraryInfo> {
+  return parseJson(await fetch("/api/library"));
 }
 
 export async function listProjects(): Promise<Project[]> {
@@ -92,6 +104,23 @@ export async function saveTimeline(projectId: string, timeline: Timeline): Promi
       body: JSON.stringify({ timeline }),
     }),
   );
+}
+
+export async function importClips(
+  projectId: string,
+  source: "inbox" | "sources",
+): Promise<{ added: number; clip_count: number; timeline: Timeline }> {
+  return parseJson(
+    await fetch(`/api/projects/${projectId}/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source }),
+    }),
+  );
+}
+
+export function mediaUrl(projectId: string, relativePath: string): string {
+  return `/api/projects/${projectId}/media/${relativePath}`;
 }
 
 export async function enqueueJob(projectId: string, type: string): Promise<Job> {

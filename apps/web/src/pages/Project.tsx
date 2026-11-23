@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import {
   enqueueJob,
   getProject,
+  importClips,
+  mediaUrl,
   saveTimeline,
   waitForJob,
   type Job,
@@ -16,13 +18,18 @@ export default function ProjectPage() {
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState(false);
+  const [activeClip, setActiveClip] = useState<string | null>(null);
 
   async function refresh() {
     const data = await getProject(projectId);
     setTitle(data.project.title);
     setTimeline(data.timeline);
+    if (!activeClip && data.timeline.clips[0]) {
+      setActiveClip(data.timeline.clips[0].id);
+    }
   }
 
   useEffect(() => {
@@ -42,6 +49,24 @@ export default function ProjectPage() {
       ),
     };
     setTimeline(await saveTimeline(projectId, next));
+  }
+
+  async function runImport(source: "inbox" | "sources") {
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const result = await importClips(projectId, source);
+      setTimeline(result.timeline);
+      setStatus(`Imported ${result.added} clip(s). Total now ${result.clip_count}.`);
+      if (result.timeline.clips[0]) {
+        setActiveClip(result.timeline.clips[0].id);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function runJob(type: (typeof JOB_ORDER)[number]) {
@@ -69,6 +94,8 @@ export default function ProjectPage() {
     );
   }
 
+  const selected = timeline.clips.find((clip) => clip.id === activeClip) || timeline.clips[0];
+
   return (
     <main className="page">
       <div className="panel">
@@ -81,13 +108,19 @@ export default function ProjectPage() {
           keep · {timeline.segments.filter((s) => s.state === "cut").length} cut
         </p>
         <div className="actions">
+          <button className="btn btn-primary" disabled={busy} onClick={() => runImport("inbox")}>
+            Import inbox
+          </button>
+          <button className="btn" disabled={busy} onClick={() => runImport("sources")}>
+            Scan sources folder
+          </button>
           {JOB_ORDER.map((type) => (
             <button key={type} className="btn" disabled={busy} onClick={() => runJob(type)}>
               {type}
             </button>
           ))}
-          <Link className="btn btn-primary" to={`/projects/${projectId}/export`}>
-            Export
+          <Link className="btn" to={`/projects/${projectId}/export`}>
+            Export page
           </Link>
         </div>
         {job ? (
@@ -95,12 +128,49 @@ export default function ProjectPage() {
             Job {job.type}: {job.status} ({Math.round(job.progress * 100)}%)
           </p>
         ) : null}
+        {status ? <p className="muted">{status}</p> : null}
         {error ? <p style={{ color: "var(--danger)" }}>{error}</p> : null}
       </div>
+
+      <div className="panel">
+        <h2>Clips</h2>
+        {timeline.clips.length === 0 ? (
+          <p className="muted">
+            Nothing imported yet. Drop files into the library inbox, then click <strong>Import inbox</strong>.
+            If you already copied files into this project&apos;s <code>sources</code> folder, click{" "}
+            <strong>Scan sources folder</strong>.
+          </p>
+        ) : (
+          <div className="clip-layout">
+            <ul className="segment-list">
+              {timeline.clips.map((clip) => (
+                <li key={clip.id}>
+                  <button className="btn" onClick={() => setActiveClip(clip.id)}>
+                    {clip.id === selected?.id ? "playing" : "play"}
+                  </button>
+                  <span>
+                    {clip.path} · {(clip.duration_ms / 1000).toFixed(1)}s
+                    {clip.error ? ` · error: ${clip.error}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {selected ? (
+              <video
+                className="preview"
+                key={selected.id}
+                controls
+                src={mediaUrl(projectId, selected.path)}
+              />
+            ) : null}
+          </div>
+        )}
+      </div>
+
       <div className="panel">
         <h2>Segments</h2>
         {timeline.segments.length === 0 ? (
-          <p className="muted">Run analyze/roughcut after importing clips via CLI.</p>
+          <p className="muted">Import clips, then run analyze/roughcut.</p>
         ) : (
           <ul className="segment-list">
             {timeline.segments.map((segment) => (
