@@ -14,7 +14,9 @@ chmod +x scripts/mac-start.sh
 ./scripts/mac-start.sh
 ```
 
-Then open http://127.0.0.1:5173
+Then open **http://127.0.0.1:8787** (UI + API in one process).
+
+Dev UI (hot reload): `WOOMBA_DEV=1 ./scripts/mac-start.sh` → http://127.0.0.1:5173
 
 Manual setup: see `docs/USAGE.md`.
 

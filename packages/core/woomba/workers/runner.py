@@ -31,6 +31,10 @@ def run_job(conn, library_root: Path, job_id: str) -> None:
             _analyze(library_root, job.project_id)
         elif job.type == JobType.roughcut:
             build_roughcut(library_root, job.project_id)
+        elif job.type == JobType.auto_roughcut:
+            _analyze(library_root, job.project_id)
+            update_job(conn, job_id, progress=0.55)
+            build_roughcut(library_root, job.project_id)
         elif job.type == JobType.polish:
             apply_polish_defaults(library_root, job.project_id)
         elif job.type == JobType.privacy:

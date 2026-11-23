@@ -18,6 +18,7 @@ class JobType(str, Enum):
     import_clips = "import"
     analyze = "analyze"
     roughcut = "roughcut"
+    auto_roughcut = "auto_roughcut"
     polish = "polish"
     privacy = "privacy"
     export = "export"

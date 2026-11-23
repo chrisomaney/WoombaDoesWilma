@@ -76,29 +76,45 @@ if [[ ! -d apps/web/node_modules ]]; then
   npm --prefix apps/web install
 fi
 
+echo "==> Building web UI"
+npm --prefix apps/web run build
+
 API_LOG="/tmp/woomba-api.log"
-WEB_LOG="/tmp/woomba-web.log"
-
-echo "==> Starting API on http://127.0.0.1:8787"
-woomba serve --host 127.0.0.1 --port 8787 >"$API_LOG" 2>&1 &
-API_PID=$!
-
-echo "==> Starting UI on http://127.0.0.1:5173"
-npm --prefix apps/web run dev -- --host 127.0.0.1 --port 5173 >"$WEB_LOG" 2>&1 &
-WEB_PID=$!
+MODE="${WOOMBA_DEV:-0}"
 
 cleanup() {
   echo
   echo "==> Stopping..."
-  kill "$WEB_PID" "$API_PID" 2>/dev/null || true
+  if [[ -n "${WEB_PID:-}" ]]; then
+    kill "$WEB_PID" 2>/dev/null || true
+  fi
+  if [[ -n "${API_PID:-}" ]]; then
+    kill "$API_PID" 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT INT TERM
 
-sleep 2
-echo
-echo "Open:  http://127.0.0.1:5173"
-echo "API:   http://127.0.0.1:8787/api/health"
-echo "Logs:  $API_LOG  |  $WEB_LOG"
+if [[ "$MODE" == "1" ]]; then
+  echo "==> Dev mode: API + Vite"
+  woomba serve --host 127.0.0.1 --port 8787 >"$API_LOG" 2>&1 &
+  API_PID=$!
+  npm --prefix apps/web run dev -- --host 127.0.0.1 --port 5173 >/tmp/woomba-web.log 2>&1 &
+  WEB_PID=$!
+  sleep 2
+  echo
+  echo "Open:  http://127.0.0.1:5173"
+  echo "API:   http://127.0.0.1:8787/api/health"
+else
+  echo "==> Starting studio on http://127.0.0.1:8787 (UI + API together)"
+  woomba serve --host 127.0.0.1 --port 8787 >"$API_LOG" 2>&1 &
+  API_PID=$!
+  sleep 2
+  echo
+  echo "Open:  http://127.0.0.1:8787"
+  echo "Health: http://127.0.0.1:8787/api/health"
+fi
+
+echo "Logs:  $API_LOG"
 echo "Drop clips in: $WOOMBA_LIBRARY/inbox"
-echo "Press Ctrl+C to stop both."
+echo "Press Ctrl+C to stop."
 wait

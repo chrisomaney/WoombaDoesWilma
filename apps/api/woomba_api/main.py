@@ -11,10 +11,13 @@ from typing import Literal
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from woomba.consent import CONSENT_TEXT, accept_consent, read_consent, require_consent
 from woomba.jobs import create_project, enqueue_job, get_job, get_project, list_jobs, list_projects
+from woomba.media.clips import delete_clip
+from woomba.media.export import list_exports
 from woomba.media.import_clips import (
     VIDEO_EXTS,
     discover_inbox,
@@ -23,13 +26,14 @@ from woomba.media.import_clips import (
     register_existing_sources,
 )
 from woomba.models import JobStatus, JobType, Timeline
-from woomba.media.export import list_exports
 from woomba.paths import ensure_library_layout, project_dir
 from woomba.settings import get_settings
 from woomba.timeline import load_timeline, save_timeline
 from woomba_api.auth import enforce_token
 from woomba_api.deps import get_conn
 from woomba_api.runner import cancel_job, start_worker
+
+WEB_DIST = Path(__file__).resolve().parents[2] / "web" / "dist"
 
 app = FastAPI(title="WoombaDoesWilma", version="0.1.0", dependencies=[Depends(enforce_token)])
 app.add_middleware(
@@ -164,6 +168,20 @@ def api_get_project(project_id: str) -> dict:
     settings = get_settings()
     timeline = load_timeline(settings.resolve_library(), project_id)
     return {"project": project.model_dump(), "timeline": timeline.model_dump()}
+
+
+@app.delete("/api/projects/{project_id}/clips/{clip_id}")
+def api_delete_clip(project_id: str, clip_id: str) -> dict:
+    _require()
+    if not get_project(get_conn(), project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    settings = get_settings()
+    try:
+        remaining = delete_clip(settings.resolve_library(), project_id, clip_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Clip not found") from exc
+    timeline = load_timeline(settings.resolve_library(), project_id)
+    return {"remaining": remaining, "timeline": timeline.model_dump()}
 
 
 @app.put("/api/projects/{project_id}/timeline")
@@ -312,3 +330,31 @@ async def api_job_events(job_id: str) -> StreamingResponse:
             await asyncio.sleep(0.5)
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+def _mount_web_ui() -> None:
+    if not WEB_DIST.is_dir() or not (WEB_DIST / "index.html").is_file():
+        return
+    assets = WEB_DIST / "assets"
+    if assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets), name="web-assets")
+
+    @app.get("/")
+    def web_index() -> FileResponse:
+        return FileResponse(WEB_DIST / "index.html")
+
+    @app.get("/{full_path:path}")
+    def web_spa(full_path: str) -> FileResponse:
+        if full_path.startswith("api/") or full_path == "api":
+            raise HTTPException(status_code=404, detail="Not found")
+        candidate = (WEB_DIST / full_path).resolve()
+        try:
+            candidate.relative_to(WEB_DIST.resolve())
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid path") from exc
+        if candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(WEB_DIST / "index.html")
+
+
+_mount_web_ui()

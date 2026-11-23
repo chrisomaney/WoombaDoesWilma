@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  deleteClip,
   enqueueJob,
   fetchLibrary,
   getProject,
@@ -130,7 +131,7 @@ export default function ProjectPage() {
     }
   }
 
-  async function runJob(type: (typeof JOB_ORDER)[number]) {
+  async function runJob(type: (typeof JOB_ORDER)[number] | "auto_roughcut") {
     setBusy(true);
     setError(null);
     try {
@@ -142,6 +143,25 @@ export default function ProjectPage() {
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Job failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeClip(clipId: string) {
+    if (!window.confirm("Remove this clip from the project?")) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await deleteClip(projectId, clipId);
+      setTimeline(result.timeline);
+      setUndoStack([]);
+      if (activeClip === clipId) {
+        setActiveClip(result.timeline.clips[0]?.id || null);
+      }
+      setStatus(`Clip removed. ${result.remaining} remaining.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
     } finally {
       setBusy(false);
     }
@@ -177,6 +197,13 @@ export default function ProjectPage() {
           <button className="btn btn-primary" disabled={busy} onClick={() => setImportOpen(true)}>
             Import files…
           </button>
+          <button
+            className="btn btn-primary"
+            disabled={busy || timeline.clips.length === 0}
+            onClick={() => void runJob("auto_roughcut")}
+          >
+            Auto rough-cut
+          </button>
           <button className="btn" disabled={busy || undoStack.length === 0} onClick={() => void undoCut()}>
             Undo cut ({undoStack.length})
           </button>
@@ -209,9 +236,14 @@ export default function ProjectPage() {
             <ul className="segment-list">
               {timeline.clips.map((clip) => (
                 <li key={clip.id}>
-                  <button className="btn" onClick={() => setActiveClip(clip.id)}>
-                    {clip.id === selected?.id ? "active" : "select"}
-                  </button>
+                  <div className="actions">
+                    <button className="btn" onClick={() => setActiveClip(clip.id)}>
+                      {clip.id === selected?.id ? "active" : "select"}
+                    </button>
+                    <button className="btn" disabled={busy} onClick={() => void removeClip(clip.id)}>
+                      delete
+                    </button>
+                  </div>
                   <span>
                     {clip.path} · {(clip.duration_ms / 1000).toFixed(1)}s
                     {clip.error ? ` · error: ${clip.error}` : ""}

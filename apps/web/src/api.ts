@@ -143,6 +143,17 @@ export async function listProjectExports(
   return parseJson(await fetch(`/api/projects/${projectId}/exports`));
 }
 
+export async function deleteClip(
+  projectId: string,
+  clipId: string,
+): Promise<{ remaining: number; timeline: Timeline }> {
+  return parseJson(
+    await fetch(`/api/projects/${projectId}/clips/${clipId}`, {
+      method: "DELETE",
+    }),
+  );
+}
+
 export function mediaUrl(projectId: string, relativePath: string): string {
   return `/api/projects/${projectId}/media/${relativePath}`;
 }
