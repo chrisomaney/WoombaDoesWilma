@@ -47,6 +47,8 @@ class Segment(BaseModel):
 class ExportSettings(BaseModel):
     codec: Literal["h264", "h265"] = "h264"
     strip_metadata: bool = True
+    loudnorm: bool = False
+    keep_only: bool = True
 
 
 class Timeline(BaseModel):
@@ -55,6 +57,8 @@ class Timeline(BaseModel):
     clips: list[Clip] = Field(default_factory=list)
     segments: list[Segment] = Field(default_factory=list)
     export: ExportSettings = Field(default_factory=ExportSettings)
+    # Per-clip silence / boundary snap points in milliseconds
+    snap_points_ms: dict[str, list[int]] = Field(default_factory=dict)
 
 
 class Project(BaseModel):

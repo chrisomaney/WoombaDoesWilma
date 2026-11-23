@@ -5,22 +5,18 @@ Private, on-device Mac studio for editing (and later creating) your own amateur 
 **v1:** import → analyze → rough-cut → polish → privacy → export  
 Local React UI + FastAPI/SQLite + FFmpeg workers + CLI. No cloud upload by default.
 
-## Quick start
+## Quick start (Mac)
+
+Needs Python 3.11+, Node, and FFmpeg on PATH.
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-export WOOMBA_LIBRARY=/tmp/woomba-lib   # or ~/Movies/WoombaDoesWilma
-woomba init --i-consent
-woomba serve
+chmod +x scripts/mac-start.sh
+./scripts/mac-start.sh
 ```
 
-```bash
-cd apps/web && npm install && npm run dev
-```
+Then open http://127.0.0.1:5173
 
-See `docs/USAGE.md` for the full Mac workflow.
+Manual setup: see `docs/USAGE.md`.
 
 ## Docs
 

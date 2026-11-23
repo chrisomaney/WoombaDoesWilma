@@ -20,7 +20,16 @@ export WOOMBA_LIBRARY="$HOME/Movies/WoombaDoesWilma"
 woomba init --i-consent
 ```
 
-## Run locally
+## Run locally (easiest)
+
+```bash
+chmod +x scripts/mac-start.sh
+./scripts/mac-start.sh
+```
+
+Opens API + UI together. Ctrl+C stops both.
+
+### Manual (two terminals)
 
 Terminal A:
 
@@ -38,6 +47,14 @@ npm run dev
 
 Open http://127.0.0.1:5173
 
+## Typical workflow (UI)
+
+1. Drop clips into `$WOOMBA_LIBRARY/inbox/` (`.mp4` / `.mov` ok)
+2. Open http://127.0.0.1:5173 → create a project → open it
+3. Click **Import inbox** (or **Scan sources folder** if you already copied into `projects/<id>/sources`)
+4. Run **analyze → roughcut → export**
+5. Find renders in `$WOOMBA_LIBRARY/exports/`
+
 ## Typical CLI workflow
 
 ```bash
@@ -45,7 +62,8 @@ Open http://127.0.0.1:5173
 cp ~/Desktop/clip.mov "$WOOMBA_LIBRARY/inbox/" 2>/dev/null || true
 
 woomba project create weekend-01 --title "Weekend"
-woomba import --project weekend-01 ~/Desktop/*.mp4
+woomba import --project weekend-01
+# or: woomba import --project weekend-01 ~/Desktop/*.mp4
 woomba analyze weekend-01
 woomba roughcut weekend-01 --silence -35
 woomba polish weekend-01
@@ -54,6 +72,8 @@ woomba export weekend-01 --codec h264
 ```
 
 Exports land in `$WOOMBA_LIBRARY/exports/`.
+
+**Important:** copying files straight into `projects/.../sources` does nothing until you click **Scan sources folder** (or run import). The inbox + Import button is the normal path.
 
 ## LAN review (optional)
 

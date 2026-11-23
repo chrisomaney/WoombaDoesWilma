@@ -2,17 +2,29 @@ from __future__ import annotations
 
 import asyncio
 import json
+import mimetypes
 import re
+import tempfile
+from pathlib import Path
+from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from woomba.consent import CONSENT_TEXT, accept_consent, read_consent, require_consent
 from woomba.jobs import create_project, enqueue_job, get_job, get_project, list_jobs, list_projects
+from woomba.media.import_clips import (
+    VIDEO_EXTS,
+    discover_inbox,
+    import_paths,
+    inbox_summary,
+    register_existing_sources,
+)
 from woomba.models import JobStatus, JobType, Timeline
-from woomba.paths import ensure_library_layout
+from woomba.media.export import list_exports
+from woomba.paths import ensure_library_layout, project_dir
 from woomba.settings import get_settings
 from woomba.timeline import load_timeline, save_timeline
 from woomba_api.auth import enforce_token
@@ -46,6 +58,10 @@ class EnqueueJobBody(BaseModel):
 
 class TimelineUpdateBody(BaseModel):
     timeline: dict
+
+
+class ImportBody(BaseModel):
+    source: Literal["inbox", "sources"] = "inbox"
 
 
 @app.on_event("startup")
@@ -95,6 +111,31 @@ def _require() -> None:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
+@app.get("/api/library")
+def api_library() -> dict:
+    _require()
+    settings = get_settings()
+    root = ensure_library_layout(settings.resolve_library())
+    return {
+        "library": str(root),
+        "inbox": str(root / "inbox"),
+        "projects": str(root / "projects"),
+        "exports": str(root / "exports"),
+        "inbox_files": inbox_summary(root),
+        "recent_exports": list_exports(root)[:10],
+    }
+
+
+@app.get("/api/projects/{project_id}/exports")
+def api_project_exports(project_id: str) -> dict:
+    _require()
+    if not get_project(get_conn(), project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    settings = get_settings()
+    root = ensure_library_layout(settings.resolve_library())
+    return {"exports_dir": str(root / "exports"), "items": list_exports(root, project_id)}
+
+
 @app.get("/api/projects")
 def api_list_projects() -> list[dict]:
     _require()
@@ -134,6 +175,83 @@ def api_put_timeline(project_id: str, body: TimelineUpdateBody) -> dict:
     timeline = Timeline.model_validate({**body.timeline, "project_id": project_id})
     save_timeline(settings.resolve_library(), timeline)
     return timeline.model_dump()
+
+
+@app.post("/api/projects/{project_id}/import")
+def api_import_clips(project_id: str, body: ImportBody) -> dict:
+    _require()
+    if not get_project(get_conn(), project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    settings = get_settings()
+    root = settings.resolve_library()
+    before = len(load_timeline(root, project_id).clips)
+    if body.source == "inbox":
+        paths = discover_inbox(root)
+        if not paths:
+            raise HTTPException(status_code=400, detail="Inbox is empty — drop .mp4 files into inbox first")
+        timeline = import_paths(root, project_id, paths)
+    else:
+        timeline = register_existing_sources(root, project_id)
+        if len(timeline.clips) == before:
+            raise HTTPException(
+                status_code=400,
+                detail="No new clips in sources/ — drop files there or use inbox import",
+            )
+    return {
+        "added": len(timeline.clips) - before,
+        "clip_count": len(timeline.clips),
+        "timeline": timeline.model_dump(),
+    }
+
+
+@app.post("/api/projects/{project_id}/upload")
+async def api_upload_clips(project_id: str, files: list[UploadFile] = File(...)) -> dict:
+    _require()
+    if not get_project(get_conn(), project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+
+    settings = get_settings()
+    root = settings.resolve_library()
+    before = len(load_timeline(root, project_id).clips)
+    saved: list[Path] = []
+    with tempfile.TemporaryDirectory(prefix="woomba-upload-") as tmp:
+        tmp_path = Path(tmp)
+        for upload in files:
+            name = Path(upload.filename or "clip.bin").name
+            suffix = Path(name).suffix.lower()
+            if suffix not in VIDEO_EXTS:
+                continue
+            dest = tmp_path / name
+            dest.write_bytes(await upload.read())
+            saved.append(dest)
+        if not saved:
+            raise HTTPException(status_code=400, detail="No supported video files in upload")
+        timeline = import_paths(root, project_id, saved)
+    return {
+        "added": len(timeline.clips) - before,
+        "clip_count": len(timeline.clips),
+        "timeline": timeline.model_dump(),
+    }
+
+
+@app.get("/api/projects/{project_id}/media/{media_path:path}")
+def api_project_media(project_id: str, media_path: str) -> FileResponse:
+    _require()
+    if not get_project(get_conn(), project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    settings = get_settings()
+    project = project_dir(settings.resolve_library(), project_id).resolve()
+    candidate = (project / media_path).resolve()
+    try:
+        candidate.relative_to(project)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid media path") from exc
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="Media not found")
+    mime, _ = mimetypes.guess_type(str(candidate))
+    return FileResponse(candidate, media_type=mime or "application/octet-stream")
 
 
 @app.get("/api/projects/{project_id}/jobs")

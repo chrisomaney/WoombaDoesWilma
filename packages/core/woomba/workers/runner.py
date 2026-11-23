@@ -10,6 +10,7 @@ from woomba.media.polish import apply_polish_defaults
 from woomba.media.privacy import apply_privacy_flags
 from woomba.media.probe import probe_clip
 from woomba.media.roughcut import build_roughcut
+from woomba.media.silence import detect_silence
 from woomba.models import JobStatus, JobType
 from woomba.paths import project_dir
 from woomba.timeline import load_timeline, save_timeline
@@ -60,6 +61,12 @@ def _analyze(library_root: Path, project_id: str) -> None:
             clip.height = info.height
             clip.codec = info.codec
             clip.has_audio = info.has_audio
+            points = {0, clip.duration_ms}
+            if clip.has_audio:
+                for gap in detect_silence(abs_path):
+                    points.add(gap.start_ms)
+                    points.add(gap.end_ms)
+            timeline.snap_points_ms[clip.id] = sorted(points)
         except Exception as exc:  # noqa: BLE001
             clip.error = str(exc)
     save_timeline(library_root, timeline)

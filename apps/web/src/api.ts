@@ -32,7 +32,13 @@ export type Timeline = {
     error?: string | null;
   }>;
   segments: Segment[];
-  export: { codec: "h264" | "h265"; strip_metadata: boolean };
+  export: {
+    codec: "h264" | "h265";
+    strip_metadata: boolean;
+    loudnorm?: boolean;
+    keep_only?: boolean;
+  };
+  snap_points_ms?: Record<string, number[]>;
 };
 
 export type Job = {
@@ -42,6 +48,15 @@ export type Job = {
   status: string;
   progress: number;
   error?: string | null;
+};
+
+export type LibraryInfo = {
+  library: string;
+  inbox: string;
+  projects: string;
+  exports: string;
+  inbox_files: { count: number; names: string[] };
+  recent_exports?: Array<{ name: string; path: string; size_bytes: number }>;
 };
 
 async function parseJson<T>(response: Response): Promise<T> {
@@ -64,6 +79,10 @@ export async function acceptConsent(): Promise<ConsentState> {
       body: JSON.stringify({ accept: true }),
     }),
   );
+}
+
+export async function fetchLibrary(): Promise<LibraryInfo> {
+  return parseJson(await fetch("/api/library"));
 }
 
 export async function listProjects(): Promise<Project[]> {
@@ -92,6 +111,40 @@ export async function saveTimeline(projectId: string, timeline: Timeline): Promi
       body: JSON.stringify({ timeline }),
     }),
   );
+}
+
+export async function importClips(
+  projectId: string,
+  source: "inbox" | "sources",
+): Promise<{ added: number; clip_count: number; timeline: Timeline }> {
+  return parseJson(
+    await fetch(`/api/projects/${projectId}/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source }),
+    }),
+  );
+}
+
+export async function uploadClips(
+  projectId: string,
+  files: FileList | File[],
+): Promise<{ added: number; clip_count: number; timeline: Timeline }> {
+  const body = new FormData();
+  for (const file of Array.from(files)) {
+    body.append("files", file);
+  }
+  return parseJson(await fetch(`/api/projects/${projectId}/upload`, { method: "POST", body }));
+}
+
+export async function listProjectExports(
+  projectId: string,
+): Promise<{ exports_dir: string; items: Array<{ name: string; path: string; size_bytes: number }> }> {
+  return parseJson(await fetch(`/api/projects/${projectId}/exports`));
+}
+
+export function mediaUrl(projectId: string, relativePath: string): string {
+  return `/api/projects/${projectId}/media/${relativePath}`;
 }
 
 export async function enqueueJob(projectId: string, type: string): Promise<Job> {
