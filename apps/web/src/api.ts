@@ -119,6 +119,17 @@ export async function importClips(
   );
 }
 
+export async function uploadClips(
+  projectId: string,
+  files: FileList | File[],
+): Promise<{ added: number; clip_count: number; timeline: Timeline }> {
+  const body = new FormData();
+  for (const file of Array.from(files)) {
+    body.append("files", file);
+  }
+  return parseJson(await fetch(`/api/projects/${projectId}/upload`, { method: "POST", body }));
+}
+
 export function mediaUrl(projectId: string, relativePath: string): string {
   return `/api/projects/${projectId}/media/${relativePath}`;
 }

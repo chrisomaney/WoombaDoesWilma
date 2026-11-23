@@ -2,14 +2,19 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   enqueueJob,
+  fetchLibrary,
   getProject,
   importClips,
-  mediaUrl,
   saveTimeline,
+  uploadClips,
   waitForJob,
   type Job,
+  type Segment,
   type Timeline,
 } from "../api";
+import ClipPreview from "../components/ClipPreview";
+import ImportDialog from "../components/ImportDialog";
+import { ensureClipSegments } from "../segmentMath";
 
 const JOB_ORDER = ["analyze", "roughcut", "polish", "privacy", "export"] as const;
 
@@ -17,11 +22,15 @@ export default function ProjectPage() {
   const { projectId = "" } = useParams();
   const [timeline, setTimeline] = useState<Timeline | null>(null);
   const [title, setTitle] = useState("");
+  const [inboxPath, setInboxPath] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState(false);
   const [activeClip, setActiveClip] = useState<string | null>(null);
+  const [activeSegment, setActiveSegment] = useState<string | null>(null);
+  const [previewRequestId, setPreviewRequestId] = useState(0);
+  const [importOpen, setImportOpen] = useState(false);
 
   async function refresh() {
     const data = await getProject(projectId);
@@ -36,19 +45,38 @@ export default function ProjectPage() {
     refresh().catch((err: unknown) =>
       setError(err instanceof Error ? err.message : "Failed to load project"),
     );
+    fetchLibrary()
+      .then((lib) => setInboxPath(lib.inbox))
+      .catch(() => undefined);
   }, [projectId]);
+
+  async function persistSegments(nextSegments: Segment[]) {
+    if (!timeline) return;
+    const next: Timeline = { ...timeline, segments: nextSegments };
+    setTimeline(next);
+    setTimeline(await saveTimeline(projectId, next));
+  }
 
   async function toggleSegment(segmentId: string) {
     if (!timeline) return;
-    const next: Timeline = {
-      ...timeline,
-      segments: timeline.segments.map((segment) =>
-        segment.id === segmentId
-          ? { ...segment, state: segment.state === "keep" ? "cut" : "keep" }
-          : segment,
-      ),
-    };
-    setTimeline(await saveTimeline(projectId, next));
+    const nextSegments: Segment[] = timeline.segments.map((segment) =>
+      segment.id === segmentId
+        ? { ...segment, state: segment.state === "keep" ? ("cut" as const) : ("keep" as const) }
+        : segment,
+    );
+    await persistSegments(nextSegments);
+  }
+
+  async function applyImportResult(result: {
+    added: number;
+    clip_count: number;
+    timeline: Timeline;
+  }) {
+    setTimeline(result.timeline);
+    setStatus(`Imported ${result.added} clip(s). Total now ${result.clip_count}.`);
+    if (result.timeline.clips[0]) {
+      setActiveClip(result.timeline.clips[0].id);
+    }
   }
 
   async function runImport(source: "inbox" | "sources") {
@@ -56,14 +84,24 @@ export default function ProjectPage() {
     setError(null);
     setStatus(null);
     try {
-      const result = await importClips(projectId, source);
-      setTimeline(result.timeline);
-      setStatus(`Imported ${result.added} clip(s). Total now ${result.clip_count}.`);
-      if (result.timeline.clips[0]) {
-        setActiveClip(result.timeline.clips[0].id);
-      }
+      await applyImportResult(await importClips(projectId, source));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Import failed");
+      throw err;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runUpload(files: FileList) {
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      await applyImportResult(await uploadClips(projectId, files));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+      throw err;
     } finally {
       setBusy(false);
     }
@@ -95,6 +133,11 @@ export default function ProjectPage() {
   }
 
   const selected = timeline.clips.find((clip) => clip.id === activeClip) || timeline.clips[0];
+  const selectedSegments = selected
+    ? ensureClipSegments(timeline.segments, selected.id, selected.duration_ms).filter(
+        (s) => s.clip_id === selected.id,
+      )
+    : [];
 
   return (
     <main className="page">
@@ -108,11 +151,8 @@ export default function ProjectPage() {
           keep · {timeline.segments.filter((s) => s.state === "cut").length} cut
         </p>
         <div className="actions">
-          <button className="btn btn-primary" disabled={busy} onClick={() => runImport("inbox")}>
-            Import inbox
-          </button>
-          <button className="btn" disabled={busy} onClick={() => runImport("sources")}>
-            Scan sources folder
+          <button className="btn btn-primary" disabled={busy} onClick={() => setImportOpen(true)}>
+            Import files…
           </button>
           {JOB_ORDER.map((type) => (
             <button key={type} className="btn" disabled={busy} onClick={() => runJob(type)}>
@@ -133,12 +173,10 @@ export default function ProjectPage() {
       </div>
 
       <div className="panel">
-        <h2>Clips</h2>
+        <h2>Editor</h2>
         {timeline.clips.length === 0 ? (
           <p className="muted">
-            Nothing imported yet. Drop files into the library inbox, then click <strong>Import inbox</strong>.
-            If you already copied files into this project&apos;s <code>sources</code> folder, click{" "}
-            <strong>Scan sources folder</strong>.
+            No clips yet. Click <strong>Import files…</strong> to choose videos from this Mac.
           </p>
         ) : (
           <div className="clip-layout">
@@ -146,7 +184,7 @@ export default function ProjectPage() {
               {timeline.clips.map((clip) => (
                 <li key={clip.id}>
                   <button className="btn" onClick={() => setActiveClip(clip.id)}>
-                    {clip.id === selected?.id ? "playing" : "play"}
+                    {clip.id === selected?.id ? "active" : "select"}
                   </button>
                   <span>
                     {clip.path} · {(clip.duration_ms / 1000).toFixed(1)}s
@@ -156,11 +194,19 @@ export default function ProjectPage() {
               ))}
             </ul>
             {selected ? (
-              <video
-                className="preview"
-                key={selected.id}
-                controls
-                src={mediaUrl(projectId, selected.path)}
+              <ClipPreview
+                projectId={projectId}
+                clip={selected}
+                segments={
+                  // Use full timeline segments so edits to one clip preserve others.
+                  ensureClipSegments(timeline.segments, selected.id, selected.duration_ms)
+                }
+                activeSegmentId={activeSegment}
+                previewRequestId={previewRequestId}
+                onActiveSegment={setActiveSegment}
+                onSegmentsChange={(next) => {
+                  void persistSegments(next);
+                }}
               />
             ) : null}
           </div>
@@ -169,18 +215,28 @@ export default function ProjectPage() {
 
       <div className="panel">
         <h2>Segments</h2>
-        {timeline.segments.length === 0 ? (
-          <p className="muted">Import clips, then run analyze/roughcut.</p>
+        {selectedSegments.length === 0 ? (
+          <p className="muted">Import a clip, then drag on the timeline to cut.</p>
         ) : (
           <ul className="segment-list">
-            {timeline.segments.map((segment) => (
+            {selectedSegments.map((segment) => (
               <li key={segment.id}>
-                <button className="btn" onClick={() => toggleSegment(segment.id)}>
-                  {segment.state}
-                </button>
+                <div className="actions">
+                  <button className="btn" onClick={() => toggleSegment(segment.id)}>
+                    {segment.state}
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() => {
+                      setActiveSegment(segment.id);
+                      setPreviewRequestId((n) => n + 1);
+                    }}
+                  >
+                    Preview
+                  </button>
+                </div>
                 <span>
-                  {segment.clip_id} · {(segment.in_ms / 1000).toFixed(1)}s →{" "}
-                  {(segment.out_ms / 1000).toFixed(1)}s
+                  {(segment.in_ms / 1000).toFixed(1)}s → {(segment.out_ms / 1000).toFixed(1)}s
                   {segment.mute ? " · muted" : ""}
                   {segment.blur_faces ? " · blur" : ""}
                 </span>
@@ -188,7 +244,18 @@ export default function ProjectPage() {
             ))}
           </ul>
         )}
+        <p className="muted">Tip: double-click a colored block on the scrubber to preview that segment.</p>
       </div>
+
+      <ImportDialog
+        open={importOpen}
+        busy={busy}
+        inboxPath={inboxPath}
+        onClose={() => setImportOpen(false)}
+        onUpload={runUpload}
+        onImportInbox={() => runImport("inbox")}
+        onScanSources={() => runImport("sources")}
+      />
     </main>
   );
 }

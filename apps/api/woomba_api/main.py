@@ -4,10 +4,11 @@ import asyncio
 import json
 import mimetypes
 import re
+import tempfile
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field
 from woomba.consent import CONSENT_TEXT, accept_consent, read_consent, require_consent
 from woomba.jobs import create_project, enqueue_job, get_job, get_project, list_jobs, list_projects
 from woomba.media.import_clips import (
+    VIDEO_EXTS,
     discover_inbox,
     import_paths,
     inbox_summary,
@@ -183,6 +185,38 @@ def api_import_clips(project_id: str, body: ImportBody) -> dict:
                 status_code=400,
                 detail="No new clips in sources/ — drop files there or use inbox import",
             )
+    return {
+        "added": len(timeline.clips) - before,
+        "clip_count": len(timeline.clips),
+        "timeline": timeline.model_dump(),
+    }
+
+
+@app.post("/api/projects/{project_id}/upload")
+async def api_upload_clips(project_id: str, files: list[UploadFile] = File(...)) -> dict:
+    _require()
+    if not get_project(get_conn(), project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+
+    settings = get_settings()
+    root = settings.resolve_library()
+    before = len(load_timeline(root, project_id).clips)
+    saved: list[Path] = []
+    with tempfile.TemporaryDirectory(prefix="woomba-upload-") as tmp:
+        tmp_path = Path(tmp)
+        for upload in files:
+            name = Path(upload.filename or "clip.bin").name
+            suffix = Path(name).suffix.lower()
+            if suffix not in VIDEO_EXTS:
+                continue
+            dest = tmp_path / name
+            dest.write_bytes(await upload.read())
+            saved.append(dest)
+        if not saved:
+            raise HTTPException(status_code=400, detail="No supported video files in upload")
+        timeline = import_paths(root, project_id, saved)
     return {
         "added": len(timeline.clips) - before,
         "clip_count": len(timeline.clips),
