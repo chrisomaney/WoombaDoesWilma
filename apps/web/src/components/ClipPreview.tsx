@@ -7,6 +7,8 @@ type Clip = {
   id: string;
   path: string;
   duration_ms: number;
+  proxy_path?: string | null;
+  waveform_path?: string | null;
 };
 
 type Props = {
@@ -53,6 +55,8 @@ export default function ClipPreview({
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [viewStart, setViewStart] = useState(0);
   const [viewEnd, setViewEnd] = useState(1);
+  const [peaks, setPeaks] = useState<number[]>([]);
+  const [useProxy, setUseProxy] = useState(true);
 
   const clipSegments = useMemo(
     () => segments.filter((s) => s.clip_id === clip.id).sort((a, b) => a.in_ms - b.in_ms),
@@ -61,11 +65,30 @@ export default function ClipPreview({
 
   const durationMs = Math.max(clip.duration_ms, 1);
   const viewSpan = Math.max(0.05, viewEnd - viewStart);
+  const previewSrc = useProxy && clip.proxy_path ? clip.proxy_path : clip.path;
 
   useEffect(() => {
     setViewStart(0);
     setViewEnd(1);
+    setPeaks([]);
   }, [clip.id]);
+
+  useEffect(() => {
+    if (!clip.waveform_path) {
+      setPeaks([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(mediaUrl(projectId, clip.waveform_path))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { peaks?: number[] } | null) => {
+        if (!cancelled && data?.peaks) setPeaks(data.peaks);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, clip.waveform_path, clip.id]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -80,7 +103,7 @@ export default function ClipPreview({
     };
     video.addEventListener("timeupdate", onTime);
     return () => video.removeEventListener("timeupdate", onTime);
-  }, [playUntil, clip.id]);
+  }, [playUntil, clip.id, previewSrc]);
 
   function maybeSnap(ms: number): number {
     return snapEnabled ? snapMs(ms, snapPoints, 150) : ms;
@@ -208,14 +231,21 @@ export default function ClipPreview({
   }
 
   const playheadPct = ((currentMs / durationMs - viewStart) / viewSpan) * 100;
+  const visiblePeaks = useMemo(() => {
+    if (!peaks.length) return [];
+    const start = Math.floor(viewStart * peaks.length);
+    const end = Math.ceil(viewEnd * peaks.length);
+    return peaks.slice(start, Math.max(start + 1, end));
+  }, [peaks, viewStart, viewEnd]);
 
   return (
     <div className="clip-preview">
       <video
         ref={videoRef}
         className="preview"
+        key={`${clip.id}-${previewSrc}`}
         controls
-        src={mediaUrl(projectId, clip.path)}
+        src={mediaUrl(projectId, previewSrc)}
         onClick={(e) => {
           const video = e.currentTarget;
           if (video.paused) void video.play();
@@ -234,6 +264,11 @@ export default function ClipPreview({
           <button className={`btn ${snapEnabled ? "btn-primary" : ""}`} onClick={() => setSnapEnabled((v) => !v)} type="button">
             Snap {snapEnabled ? "on" : "off"}
           </button>
+          {clip.proxy_path ? (
+            <button className={`btn ${useProxy ? "btn-primary" : ""}`} onClick={() => setUseProxy((v) => !v)} type="button">
+              {useProxy ? "Proxy" : "Full res"}
+            </button>
+          ) : null}
           <button className="btn" type="button" onClick={() => zoomBy(0.7)}>
             Zoom in
           </button>
@@ -263,6 +298,13 @@ export default function ClipPreview({
         onPointerMove={onTrackPointerMove}
         onPointerUp={onTrackPointerUp}
       >
+        {visiblePeaks.length > 0 ? (
+          <div className="scrub-wave" aria-hidden>
+            {visiblePeaks.map((peak, index) => (
+              <span key={`p-${index}`} style={{ height: `${Math.max(8, peak * 100)}%` }} />
+            ))}
+          </div>
+        ) : null}
         {snapPoints.map((point) => {
           const pct = ((point / durationMs - viewStart) / viewSpan) * 100;
           if (pct < 0 || pct > 100) return null;

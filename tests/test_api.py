@@ -66,6 +66,10 @@ def test_delete_clip_and_auto_job_type(tmp_path: Path, monkeypatch) -> None:
     assert deleted["remaining"] == 0
     job = client.post("/api/projects/del-api/jobs", json={"type": "auto_roughcut"}).json()
     assert job["type"] == "auto_roughcut"
+    finish = client.post("/api/projects/del-api/jobs", json={"type": "finish"}).json()
+    assert finish["type"] == "finish"
+    proxy = client.post("/api/projects/del-api/jobs", json={"type": "proxy"}).json()
+    assert proxy["type"] == "proxy"
 
 
 def test_upload_files(tmp_path: Path, monkeypatch) -> None:

@@ -17,7 +17,7 @@ import ClipPreview from "../components/ClipPreview";
 import ImportDialog from "../components/ImportDialog";
 import { ensureClipSegments } from "../segmentMath";
 
-const JOB_ORDER = ["analyze", "roughcut", "polish", "privacy", "export"] as const;
+const JOB_ORDER = ["analyze", "roughcut", "proxy", "polish", "privacy", "export"] as const;
 
 export default function ProjectPage() {
   const { projectId = "" } = useParams();
@@ -33,6 +33,7 @@ export default function ProjectPage() {
   const [previewRequestId, setPreviewRequestId] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
   const [undoStack, setUndoStack] = useState<Segment[][]>([]);
+  const [dragClipId, setDragClipId] = useState<string | null>(null);
 
   async function refresh() {
     const data = await getProject(projectId);
@@ -59,6 +60,11 @@ export default function ProjectPage() {
       setUndoStack((stack) => [...stack.slice(-29), timeline.segments]);
     }
     const next: Timeline = { ...timeline, segments: nextSegments };
+    setTimeline(next);
+    setTimeline(await saveTimeline(projectId, next));
+  }
+
+  async function persistTimeline(next: Timeline) {
     setTimeline(next);
     setTimeline(await saveTimeline(projectId, next));
   }
@@ -131,7 +137,7 @@ export default function ProjectPage() {
     }
   }
 
-  async function runJob(type: (typeof JOB_ORDER)[number] | "auto_roughcut") {
+  async function runJob(type: (typeof JOB_ORDER)[number] | "auto_roughcut" | "finish") {
     setBusy(true);
     setError(null);
     try {
@@ -139,6 +145,8 @@ export default function ProjectPage() {
       const finished = await waitForJob(created.id, setJob);
       if (finished.status === "failed") {
         setError(finished.error || "Job failed");
+      } else if (type === "finish") {
+        setStatus("Finish pipeline complete — check exports.");
       }
       await refresh();
     } catch (err) {
@@ -165,6 +173,17 @@ export default function ProjectPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function reorderClips(fromId: string, toId: string) {
+    if (!timeline || fromId === toId) return;
+    const clips = [...timeline.clips];
+    const fromIdx = clips.findIndex((c) => c.id === fromId);
+    const toIdx = clips.findIndex((c) => c.id === toId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const [moved] = clips.splice(fromIdx, 1);
+    clips.splice(toIdx, 0, moved);
+    await persistTimeline({ ...timeline, clips });
   }
 
   if (!timeline) {
@@ -200,6 +219,13 @@ export default function ProjectPage() {
           <button
             className="btn btn-primary"
             disabled={busy || timeline.clips.length === 0}
+            onClick={() => void runJob("finish")}
+          >
+            Finish (cut → polish → export)
+          </button>
+          <button
+            className="btn"
+            disabled={busy || timeline.clips.length === 0}
             onClick={() => void runJob("auto_roughcut")}
           >
             Auto rough-cut
@@ -227,6 +253,7 @@ export default function ProjectPage() {
 
       <div className="panel">
         <h2>Editor</h2>
+        <p className="muted">Drag clips to set export order. Run analyze/proxy for waveform + fast preview.</p>
         {timeline.clips.length === 0 ? (
           <p className="muted">
             No clips yet. Click <strong>Import files…</strong> to choose videos from this Mac.
@@ -234,9 +261,21 @@ export default function ProjectPage() {
         ) : (
           <div className="clip-layout">
             <ul className="segment-list">
-              {timeline.clips.map((clip) => (
-                <li key={clip.id}>
+              {timeline.clips.map((clip, index) => (
+                <li
+                  key={clip.id}
+                  className={`clip-list-item ${dragClipId === clip.id ? "dragging" : ""}`}
+                  draggable
+                  onDragStart={() => setDragClipId(clip.id)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    if (dragClipId) void reorderClips(dragClipId, clip.id);
+                    setDragClipId(null);
+                  }}
+                  onDragEnd={() => setDragClipId(null)}
+                >
                   <div className="actions">
+                    <span className="muted">#{index + 1}</span>
                     <button className="btn" onClick={() => setActiveClip(clip.id)}>
                       {clip.id === selected?.id ? "active" : "select"}
                     </button>
@@ -246,6 +285,8 @@ export default function ProjectPage() {
                   </div>
                   <span>
                     {clip.path} · {(clip.duration_ms / 1000).toFixed(1)}s
+                    {clip.proxy_path ? " · proxy" : ""}
+                    {clip.waveform_path ? " · wave" : ""}
                     {clip.error ? ` · error: ${clip.error}` : ""}
                   </span>
                 </li>
@@ -255,10 +296,7 @@ export default function ProjectPage() {
               <ClipPreview
                 projectId={projectId}
                 clip={selected}
-                segments={
-                  // Use full timeline segments so edits to one clip preserve others.
-                  ensureClipSegments(timeline.segments, selected.id, selected.duration_ms)
-                }
+                segments={ensureClipSegments(timeline.segments, selected.id, selected.duration_ms)}
                 snapPoints={timeline.snap_points_ms?.[selected.id] || []}
                 activeSegmentId={activeSegment}
                 previewRequestId={previewRequestId}
@@ -303,7 +341,6 @@ export default function ProjectPage() {
             ))}
           </ul>
         )}
-        <p className="muted">Tip: double-click a colored block on the scrubber to preview that segment.</p>
       </div>
 
       <ImportDialog

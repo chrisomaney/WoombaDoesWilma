@@ -40,8 +40,10 @@ def export_project(library_root: Path, project_id: str) -> Path:
     if _disk_free_bytes(out_dir) < 200 * 1024 * 1024:
         raise RuntimeError("Less than 200MB free disk space; aborting export.")
 
-    # keep_only=True (default): export only keep segments.
+    # keep_only=True (default): export only keep segments, ordered by clip list then time.
+    clip_index = {clip.id: idx for idx, clip in enumerate(timeline.clips)}
     keep = [s for s in timeline.segments if s.state == "keep"]
+    keep.sort(key=lambda s: (clip_index.get(s.clip_id, 10_000), s.in_ms))
 
     if not keep:
         keep_clips = [c for c in timeline.clips if not c.error]
@@ -60,8 +62,6 @@ def export_project(library_root: Path, project_id: str) -> Path:
         tmp_path = Path(tmp)
         parts: list[Path] = []
         for index, segment in enumerate(keep):
-            if segment.state != "keep" and timeline.export.keep_only:
-                continue
             clip = next((c for c in timeline.clips if c.id == segment.clip_id), None)
             if clip is None:
                 continue

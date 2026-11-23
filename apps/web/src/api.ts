@@ -30,6 +30,8 @@ export type Timeline = {
     path: string;
     duration_ms: number;
     error?: string | null;
+    proxy_path?: string | null;
+    waveform_path?: string | null;
   }>;
   segments: Segment[];
   export: {

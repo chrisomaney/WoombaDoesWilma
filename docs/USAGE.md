@@ -60,8 +60,10 @@ Open http://127.0.0.1:5173
 1. Drop clips into `$WOOMBA_LIBRARY/inbox/` (`.mp4` / `.mov` ok)
 2. Open http://127.0.0.1:5173 → create a project → open it
 3. Click **Import files…** (or inbox / scan sources)
-4. Click **Auto rough-cut** (analyze + roughcut), tweak cuts on the scrubber, then **Export keep only**
-5. Find renders in `$WOOMBA_LIBRARY/exports/`
+4. Drag clips to set export order
+5. Click **Finish (cut → polish → export)** for the full pipeline, or **Auto rough-cut** then tweak manually
+6. Scrubber shows waveform after analyze/proxy; use Proxy toggle for faster preview
+7. Find renders in `$WOOMBA_LIBRARY/exports/`
 
 ## Typical CLI workflow
 

@@ -19,9 +19,11 @@ class JobType(str, Enum):
     analyze = "analyze"
     roughcut = "roughcut"
     auto_roughcut = "auto_roughcut"
+    proxy = "proxy"
     polish = "polish"
     privacy = "privacy"
     export = "export"
+    finish = "finish"
 
 
 class Clip(BaseModel):
@@ -33,6 +35,8 @@ class Clip(BaseModel):
     codec: str | None = None
     has_audio: bool = True
     error: str | None = None
+    proxy_path: str | None = None
+    waveform_path: str | None = None
 
 
 class Segment(BaseModel):

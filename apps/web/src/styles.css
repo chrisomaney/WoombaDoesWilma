@@ -330,3 +330,35 @@ select {
   background: color-mix(in srgb, var(--accent) 45%, transparent);
   pointer-events: none;
 }
+
+.scrub-wave {
+  position: absolute;
+  inset: 8px 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.scrub-wave span {
+  flex: 1;
+  min-width: 1px;
+  background: color-mix(in srgb, var(--ink) 55%, transparent);
+}
+
+.scrubber .scrub-seg,
+.scrubber .scrub-paint,
+.scrubber .scrub-playhead,
+.scrubber .scrub-snap {
+  z-index: 1;
+}
+
+.clip-list-item {
+  cursor: grab;
+}
+
+.clip-list-item.dragging {
+  opacity: 0.5;
+}
