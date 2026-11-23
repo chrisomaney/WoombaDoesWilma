@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ensureClipSegments, paintRange, resizeSegmentEdge } from "./segmentMath";
+import { ensureClipSegments, paintRange, resizeSegmentEdge, snapMs } from "./segmentMath";
 import type { Segment } from "./api";
 
 const base: Segment[] = [];
@@ -27,5 +27,10 @@ describe("segmentMath", () => {
     const next = resizeSegmentEdge(start, "c1", 3000, cut.id, "out", 2200);
     const updated = next.find((s) => s.id === cut.id)!;
     expect(updated.out_ms).toBe(2200);
+  });
+
+  it("snaps near silence markers", () => {
+    expect(snapMs(1010, [0, 1000, 2000], 50)).toBe(1000);
+    expect(snapMs(1500, [0, 1000, 2000], 50)).toBe(1500);
   });
 });

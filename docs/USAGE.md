@@ -20,7 +20,16 @@ export WOOMBA_LIBRARY="$HOME/Movies/WoombaDoesWilma"
 woomba init --i-consent
 ```
 
-## Run locally
+## Run locally (easiest)
+
+```bash
+chmod +x scripts/mac-start.sh
+./scripts/mac-start.sh
+```
+
+Opens API + UI together. Ctrl+C stops both.
+
+### Manual (two terminals)
 
 Terminal A:
 

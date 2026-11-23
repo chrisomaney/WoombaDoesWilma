@@ -131,6 +131,20 @@ export function paintRange(
   return [...others, ...normalizeClipSegments(next, clipId, durationMs)];
 }
 
+export function snapMs(ms: number, points: number[], threshold = 120): number {
+  if (!points.length) return ms;
+  let best = ms;
+  let bestDist = threshold + 1;
+  for (const point of points) {
+    const dist = Math.abs(point - ms);
+    if (dist <= threshold && dist < bestDist) {
+      best = point;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
 export function resizeSegmentEdge(
   segments: Segment[],
   clipId: string,

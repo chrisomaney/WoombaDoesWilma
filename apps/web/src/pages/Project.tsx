@@ -31,11 +31,13 @@ export default function ProjectPage() {
   const [activeSegment, setActiveSegment] = useState<string | null>(null);
   const [previewRequestId, setPreviewRequestId] = useState(0);
   const [importOpen, setImportOpen] = useState(false);
+  const [undoStack, setUndoStack] = useState<Segment[][]>([]);
 
   async function refresh() {
     const data = await getProject(projectId);
     setTitle(data.project.title);
     setTimeline(data.timeline);
+    setUndoStack([]);
     if (!activeClip && data.timeline.clips[0]) {
       setActiveClip(data.timeline.clips[0].id);
     }
@@ -50,12 +52,33 @@ export default function ProjectPage() {
       .catch(() => undefined);
   }, [projectId]);
 
-  async function persistSegments(nextSegments: Segment[]) {
+  async function persistSegments(nextSegments: Segment[], pushUndo = true) {
     if (!timeline) return;
+    if (pushUndo) {
+      setUndoStack((stack) => [...stack.slice(-29), timeline.segments]);
+    }
     const next: Timeline = { ...timeline, segments: nextSegments };
     setTimeline(next);
     setTimeline(await saveTimeline(projectId, next));
   }
+
+  async function undoCut() {
+    if (!timeline || undoStack.length === 0) return;
+    const previous = undoStack[undoStack.length - 1];
+    setUndoStack((stack) => stack.slice(0, -1));
+    await persistSegments(previous, false);
+  }
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        void undoCut();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undoStack, timeline, projectId]);
 
   async function toggleSegment(segmentId: string) {
     if (!timeline) return;
@@ -154,13 +177,16 @@ export default function ProjectPage() {
           <button className="btn btn-primary" disabled={busy} onClick={() => setImportOpen(true)}>
             Import files…
           </button>
+          <button className="btn" disabled={busy || undoStack.length === 0} onClick={() => void undoCut()}>
+            Undo cut ({undoStack.length})
+          </button>
           {JOB_ORDER.map((type) => (
             <button key={type} className="btn" disabled={busy} onClick={() => runJob(type)}>
               {type}
             </button>
           ))}
           <Link className="btn" to={`/projects/${projectId}/export`}>
-            Export page
+            Export keep only
           </Link>
         </div>
         {job ? (
@@ -201,6 +227,7 @@ export default function ProjectPage() {
                   // Use full timeline segments so edits to one clip preserve others.
                   ensureClipSegments(timeline.segments, selected.id, selected.duration_ms)
                 }
+                snapPoints={timeline.snap_points_ms?.[selected.id] || []}
                 activeSegmentId={activeSegment}
                 previewRequestId={previewRequestId}
                 onActiveSegment={setActiveSegment}

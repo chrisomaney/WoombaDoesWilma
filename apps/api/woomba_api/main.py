@@ -23,6 +23,7 @@ from woomba.media.import_clips import (
     register_existing_sources,
 )
 from woomba.models import JobStatus, JobType, Timeline
+from woomba.media.export import list_exports
 from woomba.paths import ensure_library_layout, project_dir
 from woomba.settings import get_settings
 from woomba.timeline import load_timeline, save_timeline
@@ -121,7 +122,18 @@ def api_library() -> dict:
         "projects": str(root / "projects"),
         "exports": str(root / "exports"),
         "inbox_files": inbox_summary(root),
+        "recent_exports": list_exports(root)[:10],
     }
+
+
+@app.get("/api/projects/{project_id}/exports")
+def api_project_exports(project_id: str) -> dict:
+    _require()
+    if not get_project(get_conn(), project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    settings = get_settings()
+    root = ensure_library_layout(settings.resolve_library())
+    return {"exports_dir": str(root / "exports"), "items": list_exports(root, project_id)}
 
 
 @app.get("/api/projects")

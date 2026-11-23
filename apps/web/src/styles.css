@@ -321,3 +321,12 @@ select {
   transform: translateX(-1px);
   pointer-events: none;
 }
+
+.scrub-snap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  pointer-events: none;
+}

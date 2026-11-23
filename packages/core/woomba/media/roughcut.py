@@ -23,6 +23,11 @@ def build_roughcut(
             continue
         abs_path = project / clip.path
         silence = detect_silence(abs_path, noise_db=noise_db) if clip.has_audio else []
+        points = {0, clip.duration_ms}
+        for gap in silence:
+            points.add(gap.start_ms)
+            points.add(gap.end_ms)
+        timeline.snap_points_ms[clip.id] = sorted(points)
         keep_ranges = invert_to_keep_ranges(clip.duration_ms, silence)
         if not keep_ranges:
             keep_ranges = []

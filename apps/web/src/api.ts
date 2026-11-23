@@ -32,7 +32,13 @@ export type Timeline = {
     error?: string | null;
   }>;
   segments: Segment[];
-  export: { codec: "h264" | "h265"; strip_metadata: boolean };
+  export: {
+    codec: "h264" | "h265";
+    strip_metadata: boolean;
+    loudnorm?: boolean;
+    keep_only?: boolean;
+  };
+  snap_points_ms?: Record<string, number[]>;
 };
 
 export type Job = {
@@ -50,6 +56,7 @@ export type LibraryInfo = {
   projects: string;
   exports: string;
   inbox_files: { count: number; names: string[] };
+  recent_exports?: Array<{ name: string; path: string; size_bytes: number }>;
 };
 
 async function parseJson<T>(response: Response): Promise<T> {
@@ -128,6 +135,12 @@ export async function uploadClips(
     body.append("files", file);
   }
   return parseJson(await fetch(`/api/projects/${projectId}/upload`, { method: "POST", body }));
+}
+
+export async function listProjectExports(
+  projectId: string,
+): Promise<{ exports_dir: string; items: Array<{ name: string; path: string; size_bytes: number }> }> {
+  return parseJson(await fetch(`/api/projects/${projectId}/exports`));
 }
 
 export function mediaUrl(projectId: string, relativePath: string): string {
