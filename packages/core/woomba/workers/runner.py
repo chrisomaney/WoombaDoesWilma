@@ -9,6 +9,7 @@ from woomba.media.import_clips import discover_inbox, import_paths
 from woomba.media.polish import apply_polish_defaults
 from woomba.media.privacy import apply_privacy_flags
 from woomba.media.probe import probe_clip
+from woomba.media.proxy import ensure_proxy_and_peaks
 from woomba.media.roughcut import build_roughcut
 from woomba.media.silence import detect_silence
 from woomba.models import JobStatus, JobType
@@ -29,17 +30,37 @@ def run_job(conn, library_root: Path, job_id: str) -> None:
             import_paths(library_root, job.project_id, paths)
         elif job.type == JobType.analyze:
             _analyze(library_root, job.project_id)
+            update_job(conn, job_id, progress=0.7)
+            ensure_proxy_and_peaks(library_root, job.project_id)
         elif job.type == JobType.roughcut:
             build_roughcut(library_root, job.project_id)
         elif job.type == JobType.auto_roughcut:
             _analyze(library_root, job.project_id)
-            update_job(conn, job_id, progress=0.55)
+            update_job(conn, job_id, progress=0.35)
+            ensure_proxy_and_peaks(library_root, job.project_id)
+            update_job(conn, job_id, progress=0.7)
             build_roughcut(library_root, job.project_id)
+        elif job.type == JobType.proxy:
+            ensure_proxy_and_peaks(library_root, job.project_id)
         elif job.type == JobType.polish:
             apply_polish_defaults(library_root, job.project_id)
         elif job.type == JobType.privacy:
             apply_privacy_flags(library_root, job.project_id)
         elif job.type == JobType.export:
+            export_project(library_root, job.project_id)
+        elif job.type == JobType.finish:
+            _analyze(library_root, job.project_id)
+            update_job(conn, job_id, progress=0.2)
+            ensure_proxy_and_peaks(library_root, job.project_id)
+            update_job(conn, job_id, progress=0.35)
+            build_roughcut(library_root, job.project_id)
+            update_job(conn, job_id, progress=0.55)
+            apply_polish_defaults(library_root, job.project_id)
+            timeline = load_timeline(library_root, job.project_id)
+            timeline.export.loudnorm = True
+            timeline.export.keep_only = True
+            save_timeline(library_root, timeline)
+            update_job(conn, job_id, progress=0.7)
             export_project(library_root, job.project_id)
         else:
             exhaustive = job.type

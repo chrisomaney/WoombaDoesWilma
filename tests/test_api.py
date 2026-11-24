@@ -66,6 +66,35 @@ def test_delete_clip_and_auto_job_type(tmp_path: Path, monkeypatch) -> None:
     assert deleted["remaining"] == 0
     job = client.post("/api/projects/del-api/jobs", json={"type": "auto_roughcut"}).json()
     assert job["type"] == "auto_roughcut"
+    finish = client.post("/api/projects/del-api/jobs", json={"type": "finish"}).json()
+    assert finish["type"] == "finish"
+    proxy = client.post("/api/projects/del-api/jobs", json={"type": "proxy"}).json()
+    assert proxy["type"] == "proxy"
+
+
+def test_upload_background_asset(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("WOOMBA_LIBRARY", str(tmp_path))
+    from woomba_api.deps import _conn_for
+    from woomba_api.main import app
+
+    _conn_for.cache_clear()
+    client = TestClient(app)
+    client.post("/api/consent", json={"accept": True})
+    # Minimal 1x1 PNG
+    png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\xcf\xc0"
+        b"\x00\x00\x00\x03\x00\x01\x00\x05\xfe\xd4\xef\x00\x00\x00\x00IEND\xaeB`\x82"
+    )
+    uploaded = client.post(
+        "/api/assets/backgrounds",
+        files={"files": ("bg.png", png, "image/png")},
+    )
+    assert uploaded.status_code == 200
+    body = uploaded.json()
+    assert "bg.png" in body["added"]
+    listed = client.get("/api/assets/backgrounds").json()
+    assert any(item["name"] == "bg.png" for item in listed["items"])
 
 
 def test_upload_files(tmp_path: Path, monkeypatch) -> None:

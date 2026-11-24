@@ -22,6 +22,19 @@ export type Segment = {
   blur_faces: boolean;
 };
 
+export type CreativeLooks = {
+  background_mode: "none" | "soft_blur" | "solid" | "chroma_solid" | "chroma_image";
+  background_color: string;
+  background_image?: string | null;
+  chroma_color: "green" | "magenta";
+  chroma_similarity: number;
+  face_look: "none" | "soft_beauty" | "warm_glow" | "cool_clean";
+  face_morph: "none" | "likeness_ref";
+  face_ref_image?: string | null;
+  body_type: "none" | "slim" | "soft" | "athletic" | "tall";
+  confirm_own_likeness: boolean;
+};
+
 export type Timeline = {
   project_id: string;
   version: number;
@@ -30,6 +43,8 @@ export type Timeline = {
     path: string;
     duration_ms: number;
     error?: string | null;
+    proxy_path?: string | null;
+    waveform_path?: string | null;
   }>;
   segments: Segment[];
   export: {
@@ -38,6 +53,7 @@ export type Timeline = {
     loudnorm?: boolean;
     keep_only?: boolean;
   };
+  looks?: CreativeLooks;
   snap_points_ms?: Record<string, number[]>;
 };
 
@@ -55,8 +71,16 @@ export type LibraryInfo = {
   inbox: string;
   projects: string;
   exports: string;
+  assets?: string;
   inbox_files: { count: number; names: string[] };
   recent_exports?: Array<{ name: string; path: string; size_bytes: number }>;
+  backgrounds?: Array<{ name: string; path: string; size_bytes: number }>;
+  face_refs?: Array<{ name: string; path: string; size_bytes: number }>;
+};
+
+export type AssetList = {
+  dir: string;
+  items: Array<{ name: string; path: string; size_bytes: number }>;
 };
 
 async function parseJson<T>(response: Response): Promise<T> {
@@ -141,6 +165,45 @@ export async function listProjectExports(
   projectId: string,
 ): Promise<{ exports_dir: string; items: Array<{ name: string; path: string; size_bytes: number }> }> {
   return parseJson(await fetch(`/api/projects/${projectId}/exports`));
+}
+
+export async function listBackgrounds(): Promise<AssetList> {
+  return parseJson(await fetch("/api/assets/backgrounds"));
+}
+
+export async function listFaceRefs(): Promise<AssetList> {
+  return parseJson(await fetch("/api/assets/faces"));
+}
+
+export async function uploadBackgrounds(files: FileList | File[]): Promise<AssetList & { added: string[] }> {
+  const body = new FormData();
+  for (const file of Array.from(files)) {
+    body.append("files", file);
+  }
+  return parseJson(await fetch("/api/assets/backgrounds", { method: "POST", body }));
+}
+
+export async function uploadFaceRefs(files: FileList | File[]): Promise<AssetList & { added: string[] }> {
+  const body = new FormData();
+  for (const file of Array.from(files)) {
+    body.append("files", file);
+  }
+  return parseJson(await fetch("/api/assets/faces", { method: "POST", body }));
+}
+
+export function defaultLooks(): CreativeLooks {
+  return {
+    background_mode: "none",
+    background_color: "#1a1e24",
+    background_image: null,
+    chroma_color: "green",
+    chroma_similarity: 0.25,
+    face_look: "none",
+    face_morph: "none",
+    face_ref_image: null,
+    body_type: "none",
+    confirm_own_likeness: false,
+  };
 }
 
 export async function deleteClip(

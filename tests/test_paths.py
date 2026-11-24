@@ -8,6 +8,8 @@ def test_ensure_library_layout(tmp_path: Path) -> None:
     assert (root / "inbox").is_dir()
     assert (root / "projects").is_dir()
     assert (root / "exports").is_dir()
+    assert (root / "assets" / "backgrounds").is_dir()
+    assert (root / "assets" / "faces").is_dir()
     assert inbox_dir(root).is_dir()
 
 

@@ -178,6 +178,23 @@ select {
   max-width: 20rem;
 }
 
+.field.confirm-looks {
+  max-width: 36rem;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 0.65rem;
+}
+
+.field input[type="color"] {
+  padding: 0.2rem;
+  height: 2.4rem;
+  max-width: 6rem;
+}
+
+.field input[type="range"] {
+  padding: 0;
+}
+
 .path-box {
   display: grid;
   gap: 0.65rem;
@@ -329,4 +346,36 @@ select {
   width: 1px;
   background: color-mix(in srgb, var(--accent) 45%, transparent);
   pointer-events: none;
+}
+
+.scrub-wave {
+  position: absolute;
+  inset: 8px 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.scrub-wave span {
+  flex: 1;
+  min-width: 1px;
+  background: color-mix(in srgb, var(--ink) 55%, transparent);
+}
+
+.scrubber .scrub-seg,
+.scrubber .scrub-paint,
+.scrubber .scrub-playhead,
+.scrubber .scrub-snap {
+  z-index: 1;
+}
+
+.clip-list-item {
+  cursor: grab;
+}
+
+.clip-list-item.dragging {
+  opacity: 0.5;
 }

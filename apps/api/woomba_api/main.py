@@ -25,8 +25,9 @@ from woomba.media.import_clips import (
     inbox_summary,
     register_existing_sources,
 )
+from woomba.media.looks import list_backgrounds, list_face_refs
 from woomba.models import JobStatus, JobType, Timeline
-from woomba.paths import ensure_library_layout, project_dir
+from woomba.paths import backgrounds_dir, ensure_library_layout, faces_dir, project_dir
 from woomba.settings import get_settings
 from woomba.timeline import load_timeline, save_timeline
 from woomba_api.auth import enforce_token
@@ -125,9 +126,63 @@ def api_library() -> dict:
         "inbox": str(root / "inbox"),
         "projects": str(root / "projects"),
         "exports": str(root / "exports"),
+        "assets": str(root / "assets"),
         "inbox_files": inbox_summary(root),
         "recent_exports": list_exports(root)[:10],
+        "backgrounds": list_backgrounds(root),
+        "face_refs": list_face_refs(root),
     }
+
+
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+@app.get("/api/assets/backgrounds")
+def api_list_backgrounds() -> dict:
+    _require()
+    settings = get_settings()
+    root = settings.resolve_library()
+    return {"dir": str(backgrounds_dir(root)), "items": list_backgrounds(root)}
+
+
+@app.get("/api/assets/faces")
+def api_list_faces() -> dict:
+    _require()
+    settings = get_settings()
+    root = settings.resolve_library()
+    return {"dir": str(faces_dir(root)), "items": list_face_refs(root)}
+
+
+@app.post("/api/assets/backgrounds")
+async def api_upload_background(files: list[UploadFile] = File(...)) -> dict:
+    _require()
+    return await _save_images(files, kind="backgrounds")
+
+
+@app.post("/api/assets/faces")
+async def api_upload_faces(files: list[UploadFile] = File(...)) -> dict:
+    _require()
+    return await _save_images(files, kind="faces")
+
+
+async def _save_images(files: list[UploadFile], *, kind: Literal["backgrounds", "faces"]) -> dict:
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+    settings = get_settings()
+    root = settings.resolve_library()
+    dest_dir = backgrounds_dir(root) if kind == "backgrounds" else faces_dir(root)
+    saved: list[str] = []
+    for upload in files:
+        name = Path(upload.filename or "image.bin").name
+        if Path(name).suffix.lower() not in IMAGE_EXTS:
+            continue
+        dest = dest_dir / name
+        dest.write_bytes(await upload.read())
+        saved.append(name)
+    if not saved:
+        raise HTTPException(status_code=400, detail="No supported image files (jpg/png/webp)")
+    items = list_backgrounds(root) if kind == "backgrounds" else list_face_refs(root)
+    return {"added": saved, "items": items, "dir": str(dest_dir)}
 
 
 @app.get("/api/projects/{project_id}/exports")
