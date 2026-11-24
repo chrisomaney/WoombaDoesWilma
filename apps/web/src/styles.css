@@ -178,6 +178,23 @@ select {
   max-width: 20rem;
 }
 
+.field.confirm-looks {
+  max-width: 36rem;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 0.65rem;
+}
+
+.field input[type="color"] {
+  padding: 0.2rem;
+  height: 2.4rem;
+  max-width: 6rem;
+}
+
+.field input[type="range"] {
+  padding: 0;
+}
+
 .path-box {
   display: grid;
   gap: 0.65rem;

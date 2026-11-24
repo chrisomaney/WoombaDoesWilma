@@ -56,12 +56,29 @@ class ExportSettings(BaseModel):
     keep_only: bool = True
 
 
+class CreativeLooks(BaseModel):
+    """Local-only looks for your own consented footage (not third-party deepfakes)."""
+
+    background_mode: Literal["none", "soft_blur", "solid", "chroma_solid", "chroma_image"] = "none"
+    background_color: str = "#1a1e24"
+    background_image: str | None = None  # relative to library assets/backgrounds/
+    chroma_color: Literal["green", "magenta"] = "green"
+    chroma_similarity: float = 0.25
+    face_look: Literal["none", "soft_beauty", "warm_glow", "cool_clean"] = "none"
+    # Optional likeness morph: requires a local model pack + your own reference still.
+    face_morph: Literal["none", "likeness_ref"] = "none"
+    face_ref_image: str | None = None  # relative to library assets/faces/
+    body_type: Literal["none", "slim", "soft", "athletic", "tall"] = "none"
+    confirm_own_likeness: bool = False
+
+
 class Timeline(BaseModel):
     project_id: str
     version: int = 1
     clips: list[Clip] = Field(default_factory=list)
     segments: list[Segment] = Field(default_factory=list)
     export: ExportSettings = Field(default_factory=ExportSettings)
+    looks: CreativeLooks = Field(default_factory=CreativeLooks)
     # Per-clip silence / boundary snap points in milliseconds
     snap_points_ms: dict[str, list[int]] = Field(default_factory=dict)
 

@@ -63,7 +63,16 @@ Open http://127.0.0.1:5173
 4. Drag clips to set export order
 5. Click **Finish (cut → polish → export)** for the full pipeline, or **Auto rough-cut** then tweak manually
 6. Scrubber shows waveform after analyze/proxy; use Proxy toggle for faster preview
-7. Find renders in `$WOOMBA_LIBRARY/exports/`
+7. On **Export**, pick Creative looks: background (solid / chroma), face look, body reshape
+8. Find renders in `$WOOMBA_LIBRARY/exports/`
+
+### Creative looks
+
+- **Backgrounds:** soft blur, solid pad, or chroma-key to a solid/image (shoot against green or magenta). Upload stills from the Export page into `$WOOMBA_LIBRARY/assets/backgrounds/`.
+- **Face look:** soft beauty / warm glow / cool clean grades (CPU, no model pack).
+- **Body type:** slim / soft / athletic / tall reshape via FFmpeg geometry.
+- **Likeness morph:** option is in the UI; needs your face still in `assets/faces/` plus a local model pack under `assets/models/` (engine not bundled yet — grades/reshape work today).
+- Looks require the Export confirmation checkbox (own / consented likeness only).
 
 ## Typical CLI workflow
 
@@ -97,4 +106,4 @@ Phone/browser on your Wi‑Fi can hit `http://<mac-lan-ip>:8787` with header `X-
 
 ## Boundaries
 
-Consenting-adult / owned footage only. No cloud upload. No face-swap of third parties.
+Consenting-adult / owned footage only. No cloud upload. No face-swap of third parties. Creative looks may only alter people who consented.

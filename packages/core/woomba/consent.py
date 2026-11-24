@@ -7,10 +7,12 @@ from pathlib import Path
 
 from woomba.paths import consent_path
 
-CONSENT_VERSION = 1
+CONSENT_VERSION = 2
 CONSENT_TEXT = (
     "I confirm this studio will only be used with footage I own or that was "
     "created with the informed consent of all adults appearing in it. "
+    "Creative looks (backgrounds, face grades, body reshape, likeness morph) "
+    "may only alter people who consented — including my own likeness. "
     "I will not use this software for non-consensual deepfakes or third-party face-swap."
 )
 
@@ -33,11 +35,13 @@ def read_consent(library_root: Path) -> ConsentRecord:
             text=CONSENT_TEXT,
         )
     data = json.loads(path.read_text(encoding="utf-8"))
+    stored_version = int(data.get("version", 0))
+    accepted = bool(data.get("accepted")) and stored_version == CONSENT_VERSION
     return ConsentRecord(
-        accepted=bool(data.get("accepted")),
-        version=int(data.get("version", 0)),
-        accepted_at=data.get("accepted_at"),
-        text=str(data.get("text", CONSENT_TEXT)),
+        accepted=accepted,
+        version=CONSENT_VERSION,
+        accepted_at=data.get("accepted_at") if accepted else None,
+        text=CONSENT_TEXT,
     )
 
 
